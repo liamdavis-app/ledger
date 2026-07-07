@@ -40,7 +40,7 @@ Netlify dashboard URL (`app.netlify.com`) ≠ the live app URL (`something.netli
 
 ## Open / in progress
 - **Auto-backup feature** — not shipped. Plan: `autoBackup(silent)` downloads a dated JSON backup on `finishSession()` tap (iOS requires a user gesture, so it's tied to "Finish & log"); `prefs.lastBackup` timestamp; `lastBackupText()` helper for "Last backup: N days ago"; also wants a "Back up now" button added to the existing History tab Backup card (which already has Export/Import). None of this is in the current file — needs building from scratch, not just verifying.
-- **GitHub / version history** — explicitly deferred by user. Would give commit history and could clean up the deploy pipeline, but note: it would *not* have prevented the data-loss incident above (that was a browser-storage-vs-app-code issue, unrelated to how the code is versioned).
+- **GitHub / version history** — done as of 2026-07-08. Repo pushed to [github.com/liamdavis-app/ledger](https://github.com/liamdavis-app/ledger) (public). Deploy workflow unchanged: still drag-drop `index.html` into Netlify manually; git is purely for version history alongside that. Note: it would *not* have prevented the data-loss incident above (that was a browser-storage-vs-app-code issue, unrelated to how the code is versioned).
 
 ## Standard workflow for changes (keeps token use down — follow this, don't re-derive it)
 1. Read only the relevant section of `index.html` before editing (it's long — don't read the whole file unless necessary).
