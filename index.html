@@ -936,6 +936,7 @@ function delSession(id){db.sessions=db.sessions.filter(function(x){return x.id!=
 
 /* ===== progress state ===== */
 var _pEx=null,_pMode='1rm',_pSearch='',_pGroup='All',_pbSplit='All',_exSplit='All';
+var _pPickerOpen=true,_pFiltersOpen=false,_pLogExpanded=false;
 var SPLIT_NAMES=['Chest and Triceps','Back and Biceps','Legs','Shoulders and Arms','Mix'];
 var SPLIT_COLOURS={'Chest and Triceps':'#B14E2C','Back and Biceps':'#33694C','Legs':'#7B6CA0','Shoulders and Arms':'#2E7EA6','Mix':'#A39C8C'};
 
@@ -1272,47 +1273,98 @@ function refreshPbBoard(){
   if(head){head.querySelectorAll('.scroller .chip').forEach(function(c){c.classList.toggle('on',c.textContent===_pbSplit);});}
 }
 
+function selectLift(name){
+  _pEx=name;
+  _pPickerOpen=false;
+  _pLogExpanded=false;
+  recordRecentLift(name);
+  renderExplorer();
+}
+function recordRecentLift(name){
+  var p=getPrefs();
+  var arr=(p.recentLifts||[]).filter(function(n){return n!==name;});
+  arr.unshift(name);
+  p.recentLifts=arr.slice(0,6);
+  save();
+}
+function recentLiftsChips(allNames,excludeName){
+  var rec=(getPrefs().recentLifts||[]).filter(function(n){return allNames.indexOf(n)>=0&&n!==excludeName;}).slice(0,5);
+  if(!rec.length)return '';
+  return '<div class="lbl" style="margin-bottom:6px">Recent</div><div class="scroller" style="margin-bottom:10px">'+
+    rec.map(function(n){return '<span class="chip" onclick="event.stopPropagation();selectLift(\''+escAttr(n)+'\')">'+esc(n)+'</span>';}).join('')+
+    '</div>';
+}
+
 function renderExplorer(){
   var wrap=document.getElementById('explorerWrap');if(!wrap)return;
   var allNames=allTrackedNames();
   var filtered=filterNames(allNames);
-  if(!_pEx||filtered.indexOf(_pEx)<0)_pEx=filtered[0]||null;
+
+  if(!_pEx||allNames.indexOf(_pEx)<0){
+    var rec=(getPrefs().recentLifts||[]).filter(function(n){return allNames.indexOf(n)>=0;});
+    _pEx=rec[0]||allNames[0]||null;
+  }
+  if(_pPickerOpen&&_pEx&&filtered.indexOf(_pEx)<0)_pEx=filtered[0]||_pEx;
 
   var r='<div class="card" style="padding:13px 14px">';
 
-  /* split filter */
-  r+='<div class="lbl" style="margin-bottom:7px">Filter by split</div>';
-  r+='<div class="scroller" style="margin-bottom:12px">'+['All'].concat(SPLIT_NAMES).map(function(s){
-    return '<span class="chip '+(_exSplit===s?'on':'')+'" onclick="_exSplit=\''+escAttr(s)+'\';_pSearch=\'\';_pGroup=\'All\';renderExplorer()">'+esc(s)+'</span>';
-  }).join('')+'</div>';
-
-  /* search */
-  r+='<input class="inp" id="pSearch" placeholder="Search exercises\u2026" value="'+esc(_pSearch)+'" oninput="_pSearch=this.value;renderExplorer()" style="margin-bottom:10px">';
-
-  /* muscle group sub-filter */
-  r+='<div class="lbl" style="margin-bottom:6px">Filter by muscle</div>';
-  r+='<div class="scroller" style="margin-bottom:4px">'+['All'].concat(GROUPS).map(function(g){
-    return '<span class="chip '+(_pGroup===g?'on':'')+'" onclick="_pGroup=\''+g+'\';_pSearch=\'\';renderExplorer()">'+g+'</span>';
-  }).join('')+'</div>';
-
-  /* exercise list */
-  if(filtered.length){
-    var byG={};filtered.forEach(function(n){var g=groupOf(n);(byG[g]=byG[g]||[]).push(n);});
-    r+='<div style="margin-top:10px">';
-    Object.keys(byG).sort().forEach(function(g){
-      r+='<div class="lbl" style="margin:10px 0 4px">'+g+'</div>';
-      byG[g].forEach(function(n){
-        var pb=exPB(n);
-        r+='<div class="pickrow '+(n===_pEx?'sel':'')+'" onclick="_pEx=\''+escAttr(n)+'\';renderExplorer()">'+
-          '<div class="box">'+sv('check')+'</div>'+
-          '<div style="flex:1"><div class="nm">'+esc(n)+'</div>'+
-          (pb?'<div class="meta moss">PB '+pb.txt+' \u00b7 1RM '+pb.e1rm+' kg</div>':'<div class="meta faint">No data</div>')+
-          '</div></div>';
-      });
-    });
-    r+='</div>';
+  if(_pEx&&!_pPickerOpen){
+    /* collapsed: compact selected-exercise header + one-tap recents */
+    var pbC=exPB(_pEx);
+    r+='<div class="pickrow sel" style="border-bottom:none;padding:2px 2px 6px;cursor:pointer" onclick="_pPickerOpen=true;renderExplorer()">'+
+      '<div style="flex:1"><div class="nm">'+esc(_pEx)+'</div>'+
+      (pbC?'<div class="meta moss">PB '+pbC.txt+' \u00b7 1RM '+pbC.e1rm+' kg</div>':'<div class="meta faint">No data</div>')+
+      '</div><span class="muted tiny" style="flex:none">Change \u203a</span></div>';
+    r+=recentLiftsChips(allNames,_pEx);
   }else{
-    r+='<p class="muted tiny" style="padding:14px 2px">No exercises match.</p>';
+    /* expanded: search-first picker, split/muscle filters tucked behind one toggle */
+    if(_pEx){
+      r+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'+
+        '<span class="chip" onclick="_pPickerOpen=false;renderExplorer()">Done</span></div>';
+    }
+
+    r+='<input class="inp" id="pSearch" placeholder="Search exercises\u2026" value="'+esc(_pSearch)+'" oninput="_pSearch=this.value;renderExplorer()" style="margin-bottom:10px">';
+
+    r+=recentLiftsChips(allNames,null);
+
+    var filterBits=[];
+    if(_exSplit!=='All')filterBits.push(_exSplit);
+    if(_pGroup!=='All')filterBits.push(_pGroup);
+    r+='<div class="scroller" style="margin-bottom:'+(_pFiltersOpen?'8px':'2px')+'">'+
+      '<span class="chip '+(_pFiltersOpen?'on':'')+'" onclick="_pFiltersOpen=!_pFiltersOpen;renderExplorer()">'+
+      'Filters'+(filterBits.length?': '+esc(filterBits.join(' \u00b7 ')):'')+'</span></div>';
+
+    if(_pFiltersOpen){
+      r+='<div class="lbl" style="margin-bottom:7px">Split</div>';
+      r+='<div class="scroller" style="margin-bottom:12px">'+['All'].concat(SPLIT_NAMES).map(function(s){
+        return '<span class="chip '+(_exSplit===s?'on':'')+'" onclick="_exSplit=\''+escAttr(s)+'\';_pSearch=\'\';_pGroup=\'All\';renderExplorer()">'+esc(s)+'</span>';
+      }).join('')+'</div>';
+
+      r+='<div class="lbl" style="margin-bottom:6px">Muscle</div>';
+      r+='<div class="scroller" style="margin-bottom:4px">'+['All'].concat(GROUPS).map(function(g){
+        return '<span class="chip '+(_pGroup===g?'on':'')+'" onclick="_pGroup=\''+g+'\';_pSearch=\'\';renderExplorer()">'+g+'</span>';
+      }).join('')+'</div>';
+    }
+
+    /* exercise list */
+    if(filtered.length){
+      var byG={};filtered.forEach(function(n){var g=groupOf(n);(byG[g]=byG[g]||[]).push(n);});
+      r+='<div style="margin-top:10px">';
+      Object.keys(byG).sort().forEach(function(g){
+        r+='<div class="lbl" style="margin:10px 0 4px">'+g+'</div>';
+        byG[g].forEach(function(n){
+          var pb=exPB(n);
+          r+='<div class="pickrow '+(n===_pEx?'sel':'')+'" onclick="selectLift(\''+escAttr(n)+'\')">'+
+            '<div class="box">'+sv('check')+'</div>'+
+            '<div style="flex:1"><div class="nm">'+esc(n)+'</div>'+
+            (pb?'<div class="meta moss">PB '+pb.txt+' \u00b7 1RM '+pb.e1rm+' kg</div>':'<div class="meta faint">No data</div>')+
+            '</div></div>';
+        });
+      });
+      r+='</div>';
+    }else{
+      r+='<p class="muted tiny" style="padding:14px 2px">No exercises match.</p>';
+    }
   }
   r+='</div>';
 
@@ -1420,7 +1472,9 @@ function renderProgressLift(){
       if(bestW||bestR)logPts.push({d:s.date,w:bestW,r:bestR,e1:Math.round(bestE),kpr:kpr});
     });
     var rev=logPts.slice().reverse();
-    rev.forEach(function(p,i){
+    var LOG_PREVIEW=5;
+    var visRev=_pLogExpanded?rev:rev.slice(0,LOG_PREVIEW);
+    visRev.forEach(function(p,i){
       var prev=rev[i+1];
       var deltaHtml='';
       if(prev){
@@ -1443,6 +1497,11 @@ function renderProgressLift(){
         '<div style="display:flex;align-items:center;gap:10px">'+deltaHtml+
         '<span class="num" style="font-weight:600">'+dispVal+'</span></div></div>';
     });
+    if(rev.length>LOG_PREVIEW){
+      h+='<div style="text-align:center;margin-top:8px">'+
+        '<span class="chip" style="display:inline-block" onclick="_pLogExpanded='+(!_pLogExpanded)+';renderProgressLift()">'+
+        (_pLogExpanded?'Show less':'Show all '+rev.length+' sessions')+'</span></div>';
+    }
   }
   h+='</div>';
   el2.innerHTML=h;
