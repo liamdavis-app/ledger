@@ -54,7 +54,9 @@
   .sub{color:var(--ink2);font-size:13.5px;margin-top:5px;}
 
   /* ---- view fade ---- */
-  #app{animation:fade .26s ease;}
+  /* padding-top clears .top's -14px margin-bottom (used so its fade overlay bleeds onto scrolling content) —
+     without it, every tab's first element sits 14px behind the header and its top edge gets visually cut off. */
+  #app{animation:fade .26s ease;padding-top:14px;}
   @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
   @media (prefers-reduced-motion:reduce){#app{animation:none;}}
 
@@ -186,6 +188,20 @@
   .pickrow.sel .box svg{opacity:1;}
   .pickrow .nm{font-weight:600;font-size:15px;}
 
+  /* ---- lift explorer carousel ---- */
+  .liftrail{display:flex;gap:9px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 -14px;
+    padding:2px 14px 6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .liftrail::-webkit-scrollbar{display:none;}
+  .liftcard{flex:0 0 auto;width:132px;scroll-snap-align:start;background:var(--paper);border-radius:13px;
+    padding:11px 12px;box-shadow:inset 0 0 0 1px var(--hair);cursor:pointer;transition:box-shadow .15s;}
+  .liftcard.sel{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--clay),0 1px 2px var(--shadow);}
+  .lc-name{font-size:13px;font-weight:600;line-height:1.25;margin-bottom:4px;min-height:2.5em;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .lc-pb{font-size:10.5px;color:var(--moss);font-weight:600;margin-bottom:6px;}
+  .lc-pb.faint{color:var(--faint);font-weight:500;}
+  .lc-spark{width:100%;height:32px;display:block;}
+  .lc-spark.empty{height:32px;}
+
   /* ---- empty ---- */
   .empty{text-align:center;padding:46px 24px;color:var(--ink2);}
   .empty .ic{width:42px;height:42px;margin:0 auto 14px;color:var(--faint);}
@@ -287,7 +303,8 @@ var IC={
   calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
   medal:'<circle cx="12" cy="14" r="6"/><path d="M9 8L7 2h10l-2 6M12 11v6M9.5 14h5"/>',
   scales:'<path d="M12 3v18M7 21h10M5 7h14M5 7l-2.5 6a3 3 0 0 0 5 0L5 7zM19 7l-2.5 6a3 3 0 0 0 5 0L19 7z"/>',
-  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  pencil:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'
 };
 function sv(name,cls){return '<svg viewBox="0 0 24 24" class="'+(cls||'')+'">'+IC[name]+'</svg>';}
 
@@ -561,19 +578,28 @@ function libByName(n){return db.library.find(function(x){return x.name.toLowerCa
 function groupOf(n){var l=libByName(n);return l?l.group:'Other';}
 function descOf(n){var l=libByName(n);return l&&l.desc?l.desc:'';}
 
+/* the single definition of "best set" for PB purposes, shared by live + historical:
+   heaviest weight (2+ reps only), ties broken by more reps at that weight */
+function bestWeightSet(sets,requireDone){
+  var best=null;
+  sets.forEach(function(st){
+    if(requireDone&&!st.done)return;
+    var w=+st.w||0,r=+st.r||0;
+    if(!w||r<2)return;
+    if(!best||w>best.w||(w===best.w&&r>best.r))best={w:w,r:r};
+  });
+  return best;
+}
 /* live in-session stats for an active exercise, from its COMPLETED (ticked) sets only */
 function liveExerciseStats(exObj){
-  var best=null; /* {w,r,e1rm} best single completed set by est 1RM */
   var totKg=0,totR=0,doneCount=0;
   exObj.sets.forEach(function(st){
     if(!st.done)return;
     var w=+st.w||0,r=+st.r||0;if(!w&&!r)return;
     doneCount++;
     if(w&&r){totKg+=w*r;totR+=r;}
-    var e1=w?(w*(1+r/30)):0;
-    if(w&&r&&(!best||e1>best.e1rm))best={w:w,r:r,e1rm:e1};
   });
-  return {best:best,kpr:(totR>0?totKg/totR:null),doneCount:doneCount};
+  return {best:bestWeightSet(exObj.sets,true),kpr:(totR>0?totKg/totR:null),doneCount:doneCount};
 }
 function ensureInLibrary(name,group){name=name.trim();if(!name)return;if(!libByName(name)){db.library.push({id:uid(),name:name,group:group||'Other'});save();}}
 function lastPerf(name){for(var i=db.sessions.length-1;i>=0;i--){var ex=db.sessions[i].exercises.find(function(e){return e.name.toLowerCase()===name.toLowerCase();});if(ex&&ex.sets.length)return ex.sets;}return null;}
@@ -588,7 +614,7 @@ function lastSessionKgPerRep(name){
   }
   return null;
 }
-function exPB(name){var bestW=0,bestR=0;db.sessions.forEach(function(s){s.exercises.forEach(function(e){if(e.name.toLowerCase()!==name.toLowerCase())return;e.sets.forEach(function(st){var w=+st.w||0,r=+st.r||0;if(!w||r<2)return;if(w>bestW){bestW=w;bestR=r;}});});});if(!bestW)return null;return{e1rm:Math.round(bestW*(1+bestR/30)),txt:trimNum(bestW)+' kg \u00d7 '+bestR};}
+function exPB(name){var best=null;db.sessions.forEach(function(s){s.exercises.forEach(function(e){if(e.name.toLowerCase()!==name.toLowerCase())return;var b=bestWeightSet(e.sets,false);if(b&&(!best||b.w>best.w||(b.w===best.w&&b.r>best.r)))best=b;});});if(!best)return null;return{w:best.w,r:best.r,e1rm:Math.round(best.w*(1+best.r/30)),txt:trimNum(best.w)+' kg \u00d7 '+best.r};}
 function trimNum(n){return (Math.round(n*10)/10).toString();}
 
 /* ===== session ===== */
@@ -597,6 +623,49 @@ function startSession(name,exNames){db.active={id:uid(),date:todayStr(),name:nam
   exercises:(exNames||[]).map(function(n){return {id:uid(),name:n,sets:newSets(3)};})};save();go('today');}
 function startSplit(sid){var sp=db.splits.find(function(x){return x.id===sid;});if(!sp)return;
   db.active={id:uid(),date:todayStr(),name:sp.name,splitId:sp.id,exercises:sp.exercises.map(function(e){return {id:uid(),name:e.name,sets:newSets(e.sets||3)};})};save();go('today');}
+function openStartSheet(){
+  var h='<h2>Start new session</h2>';
+  if(db.splits.length){
+    h+='<div class="muted tiny" style="margin:-8px 0 12px">Pick a split to load its usual exercises.</div>';
+    db.splits.forEach(function(sp){h+='<div class="item" style="cursor:pointer" onclick="closeSheet();startSplit(\''+sp.id+'\')"><div><div class="nm">'+esc(sp.name)+'</div><div class="meta">'+sp.exercises.length+' exercises</div></div>'+
+      '<div style="display:flex;align-items:center;gap:10px"><button class="xbtn" title="Edit '+escAttr(sp.name)+'" onclick="event.stopPropagation();editSplit(\''+sp.id+'\')">'+sv('pencil')+'</button><span style="color:var(--faint);font-size:20px">›</span></div></div>';});
+  }else{
+    h+='<div class="empty"><div class="ic">'+sv('splits')+'</div><p>No splits saved yet — create one first with “Create new split” below.</p></div>';
+  }
+  h+='<div class="stick"><button class="btn ghost" style="width:100%" onclick="closeSheet()">Cancel</button></div>';
+  openSheet(h);
+}
+/* logged sessions grouped by their (trimmed) name, e.g. all sessions named "Legs" */
+function sessionsByName(){
+  var byName={};
+  db.sessions.forEach(function(s){var nm=(s.name||'').trim();if(!nm)return;(byName[nm]=byName[nm]||[]).push(s);});
+  return byName;
+}
+/* session names logged 2+ times that don't already match a saved split — candidates worth turning into a split */
+function candidateSplitNames(){
+  var byName=sessionsByName();
+  var existing=db.splits.map(function(sp){return sp.name.toLowerCase();});
+  return Object.keys(byName).filter(function(nm){return byName[nm].length>=2&&existing.indexOf(nm.toLowerCase())<0;});
+}
+/* one-time helper: turns recurring session names (e.g. "Legs", logged 6 times) into real splits,
+   pre-filled with the exercises you actually logged under that name most often (2+ times; falls back
+   to whatever's there if nothing recurs), capped to 8, default sets = median sets logged for it */
+function buildSplitsFromHistory(){
+  var byName=sessionsByName();
+  var names=candidateSplitNames();
+  names.forEach(function(nm){
+    var freq={},setsSeen={};
+    byName[nm].forEach(function(s){s.exercises.forEach(function(e){freq[e.name]=(freq[e.name]||0)+1;(setsSeen[e.name]=setsSeen[e.name]||[]).push(e.sets.length);});});
+    var picked=Object.keys(freq).filter(function(n){return freq[n]>=2;});
+    if(!picked.length)picked=Object.keys(freq);
+    picked.sort(function(a,b){return freq[b]-freq[a]||a.localeCompare(b);});
+    picked=picked.slice(0,8);
+    var exercises=picked.map(function(n){var arr=setsSeen[n].slice().sort(function(a,b){return a-b;});return {name:n,sets:arr[Math.floor(arr.length/2)]||3};});
+    db.splits.push({id:uid(),name:nm,exercises:exercises});
+  });
+  save();
+  return names;
+}
 function addSet(eid){var e=db.active.exercises.find(function(x){return x.id===eid;});var last=e.sets[e.sets.length-1];e.sets.push({w:last?last.w:'',r:'',done:false});save();render();}
 function delSet(eid){var e=db.active.exercises.find(function(x){return x.id===eid;});if(e.sets.length>1){e.sets.pop();save();render();}}
 function delEx(eid){db.active.exercises=db.active.exercises.filter(function(x){return x.id!==eid;});save();render();}
@@ -703,7 +772,22 @@ function attachSheetDrag(){
 
 /* ===== picker ===== */
 var picker={sel:[],filter:'All',onConfirm:null,title:''};
-function openPicker(opts){picker={sel:(opts.preselect||[]).slice(),filter:'All',onConfirm:opts.onConfirm,title:opts.title||'Choose exercises'};drawPicker();}
+function openPicker(opts){picker={sel:(opts.preselect||[]).slice(),filter:opts.filter||'All',onConfirm:opts.onConfirm,title:opts.title||'Choose exercises'};drawPicker();}
+/* guess a split's primary muscle group from its name, for defaulting the exercise picker's filter — 'All' if ambiguous/no match */
+function guessGroupFromSplitName(name){
+  name=(name||'').toLowerCase();
+  var map=[['leg','Legs'],['chest','Chest'],['back','Back'],['shoulder','Shoulders'],['bicep','Biceps'],['tricep','Triceps'],['core','Core'],['ab','Core']];
+  for(var i=0;i<map.length;i++){if(name.indexOf(map[i][0])>=0)return map[i][1];}
+  return 'All';
+}
+/* sessions whose logged name matches a group, e.g. "Legs" sessions for the Legs group */
+function sessionsMatchingGroupName(group){return db.sessions.filter(function(s){return s.name&&s.name.toLowerCase().indexOf(group.toLowerCase())>=0;});}
+/* exercise -> times logged within those matching sessions, for ranking "what I usually do for this group" */
+function exerciseFreqInGroup(group){
+  var freq={};
+  sessionsMatchingGroupName(group).forEach(function(s){s.exercises.forEach(function(e){freq[e.name]=(freq[e.name]||0)+1;});});
+  return freq;
+}
 function onPickFocus(){setTimeout(function(){if(_vvHandler)_vvHandler();var e=document.getElementById('pickSearch');if(e&&e.scrollIntoView)e.scrollIntoView({block:'nearest',behavior:'smooth'});},250);}
 function drawPicker(){
   var groups=['All'].concat(GROUPS);
@@ -728,8 +812,15 @@ function drawPickList(){
   var exactExists=db.library.some(function(x){return x.name.toLowerCase()===q;});
   var creating=typed&&!exactExists;
 
-  var list=db.library.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
-  if(picker.filter!=='All')list=list.filter(function(x){return x.group===picker.filter;});
+  var list=db.library.slice();
+  if(picker.filter!=='All'){
+    list=list.filter(function(x){return x.group===picker.filter;});
+    /* within a specific group, surface what's usually done for it first — most logged in same-named sessions, then alphabetical */
+    var freq=exerciseFreqInGroup(picker.filter);
+    list.sort(function(a,b){var fa=freq[a.name]||0,fb=freq[b.name]||0;if(fb!==fa)return fb-fa;return a.name.localeCompare(b.name);});
+  }else{
+    list.sort(function(a,b){return a.name.localeCompare(b.name);});
+  }
   if(q)list=list.filter(function(x){return x.name.toLowerCase().indexOf(q)>=0;});
   var byG={};list.forEach(function(x){(byG[x.group]=byG[x.group]||[]).push(x);});
   var h='';
@@ -792,30 +883,42 @@ function render(){var T=document.getElementById('viewTitle'),S=document.getEleme
   ({today:renderToday,splits:renderSplits,library:renderLibrary,history:renderHistory,progress:renderProgress}[view])(app,T,S);}
 
 function renderToday(app,T,S){
-  if(!db.active){T.textContent='Today';S.textContent="Let's get a session on the board";
-    var r='<div class="card"><div class="lbl" style="margin-bottom:13px">Start training</div>'+
-      '<button class="btn primary" style="margin-bottom:9px" onclick="openPicker({title:\'Build your session\',onConfirm:function(n){startSession(\'Open session\',n);}})">Pick exercises</button>'+
-      '<button class="btn ghost" onclick="startSession(\'Open session\',[])">Start blank</button></div>';
-    if(db.splits.length){r+='<div class="sectit">Or load a split</div>';
-      db.splits.forEach(function(sp){r+='<div class="card" style="padding:0 17px"><div class="item"><div><div class="nm">'+esc(sp.name)+'</div><div class="meta">'+sp.exercises.length+' exercises</div></div><button class="btn sm primary" onclick="startSplit(\''+sp.id+'\')">Start</button></div></div>';});}
-    else{r+='<div class="empty"><div class="ic">'+sv('splits')+'</div><p>Build a split like Chest &amp; Triceps under the Splits tab, then start it here in one tap.</p></div>';}
+  if(!db.active){T.textContent='Today';S.textContent='Start today’s session';
+    var r='<button class="btn primary" style="margin-bottom:9px" onclick="openStartSheet()">Start new session</button>';
+    r+='<button class="btn dash" style="margin-bottom:9px" onclick="editSplit()">'+sv('plus','')+' Create new split</button>';
+    r+='<button class="btn dash" style="margin-bottom:24px" onclick="startSession(\'Open session\',[])">'+sv('plus','')+' Start blank session</button>';
     app.innerHTML=r;return;}
   var a=db.active;T.textContent=a.name;
   var done=0,tot=0;a.exercises.forEach(function(e){e.sets.forEach(function(s){tot++;if(s.done)done++;});});
   S.textContent=done+' of '+tot+' sets done \u00b7 '+sessionVolume(a).toLocaleString()+' kg moved';
   var r='';
-  a.exercises.forEach(function(e){var histPB=exPB(e.name),prev=lastPerf(e.name);var dsc=descOf(e.name);
-    var live=liveExerciseStats(e);
+  var core=a.exercises,extra=[];
+  if(a.splitId){core=a.exercises.filter(function(e){return !e.extra;});extra=a.exercises.filter(function(e){return e.extra;});}
+  core.forEach(function(e){r+=exerciseCardHtml(e);});
+  if(extra.length){
+    var byG={};extra.forEach(function(e){var g=groupOf(e.name);(byG[g]=byG[g]||[]).push(e);});
+    r+='<div class="sectit" style="cursor:pointer" onclick="toggleExtras()">'+(_extrasOpen?'– ':'+ ')+'Added outside this split ('+extra.length+')</div>';
+    if(_extrasOpen){GROUPS.forEach(function(g){if(!byG[g])return;
+      r+='<div class="muted tiny" style="margin:10px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">'+g+'</div>';
+      byG[g].forEach(function(e){r+=exerciseCardHtml(e);});});}
+  }
+  r+='<button class="btn dash" style="margin-bottom:13px" onclick="addExtra()">'+sv('plus','')+' Add exercise</button>';
+  r+='<div class="row" style="margin-bottom:24px"><button class="btn danger" style="flex:1" onclick="confirmDiscard()">Discard</button><button class="btn primary" style="flex:2" onclick="finishSession()">Finish &amp; log</button></div>';
+  app.innerHTML=r;
+}
+var _extrasOpen=false;
+function toggleExtras(){_extrasOpen=!_extrasOpen;render();}
+function exerciseCardHtml(e){var histPB=exPB(e.name),prev=lastPerf(e.name);var dsc=descOf(e.name);
+    var live=liveExerciseStats(e);var r='';
     r+='<div class="card ex"><div class="ex-head"><div><h3>'+esc(e.name)+'</h3><div class="ex-grp">'+groupOf(e.name)+'</div></div><button class="xbtn" onclick="delEx(\''+e.id+'\')">'+sv('x')+'</button></div>';
     if(dsc)r+='<div class="muted tiny" style="margin:4px 0 0;line-height:1.45">'+esc(dsc)+'</div>';
 
     /* --- live stat line: PB (auto-updating, flags new PB) + live kg/rep --- */
     /* determine best to show: compare history PB e1rm vs this session's best completed set */
-    var histE=histPB?histPB.e1rm:0;
     var liveBest=live.best;
     var isNewPB=false, bestTxt='', best1rm=0;
-    if(liveBest&&liveBest.e1rm>histE+0.01){
-      isNewPB=true;bestTxt=trimNum(liveBest.w)+' kg \u00d7 '+liveBest.r;best1rm=Math.round(liveBest.e1rm);
+    if(liveBest&&(!histPB||liveBest.w>histPB.w||(liveBest.w===histPB.w&&liveBest.r>histPB.r))){
+      isNewPB=true;bestTxt=trimNum(liveBest.w)+' kg \u00d7 '+liveBest.r;best1rm=Math.round(liveBest.w*(1+liveBest.r/30));
     }else if(histPB){
       bestTxt=histPB.txt;best1rm=histPB.e1rm;
     }
@@ -852,22 +955,25 @@ function renderToday(app,T,S){
         '<div class="cell"><input class="num" type="number" inputmode="decimal" value="'+s.w+'" placeholder="'+(p?trimNum(p.w):'\u2013')+'" onchange="setVal(\''+e.id+'\','+i+',\'w\',this.value)"></div>'+
         '<div class="cell"><input class="num" type="number" inputmode="numeric" value="'+s.r+'" placeholder="'+(p?p.r:'\u2013')+'" onchange="setVal(\''+e.id+'\','+i+',\'r\',this.value)"></div>'+
         '<button class="markbtn" onclick="toggleDone(\''+e.id+'\','+i+')">'+sv('check')+'</button></div>';});
-    r+='</div><div class="setadd"><button onclick="addSet(\''+e.id+'\')">+ Set</button><button onclick="delSet(\''+e.id+'\')">\u2013 Set</button></div></div>';});
-  r+='<button class="btn dash" style="margin-bottom:13px" onclick="addExtra()">'+sv('plus','')+' Add exercise</button>';
-  r+='<div class="row" style="margin-bottom:24px"><button class="btn danger" style="flex:1" onclick="confirmDiscard()">Discard</button><button class="btn primary" style="flex:2" onclick="finishSession()">Finish &amp; log</button></div>';
-  app.innerHTML=r;
+    r+='</div><div class="setadd"><button onclick="addSet(\''+e.id+'\')">+ Set</button><button onclick="delSet(\''+e.id+'\')">\u2013 Set</button></div></div>';
+  return r;
 }
 function addExtra(){var have=db.active.exercises.map(function(e){return e.name;});
   openPicker({title:'Add to this session',preselect:have,onConfirm:function(names){
-    names.filter(function(n){return have.indexOf(n)<0;}).forEach(function(n){db.active.exercises.push({id:uid(),name:n,sets:newSets(3)});});save();render();}});}
+    names.filter(function(n){return have.indexOf(n)<0;}).forEach(function(n){db.active.exercises.push({id:uid(),name:n,sets:newSets(3),extra:true});});save();render();}});}
 function confirmDiscard(){openSheet('<h2>Discard this session?</h2><p class="muted" style="margin:-6px 0 4px">Nothing gets saved to your history.</p><div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Keep going</button><button class="btn danger" style="flex:1" onclick="discardSession()">Discard</button></div>');}
 
-function renderSplits(app,T,S){T.textContent='Splits';S.textContent='Your training days, ready to load';
-  var r='<button class="btn dash" style="margin-bottom:14px" onclick="editSplit()">'+sv('plus','')+' New split</button>';
+function renderSplits(app,T,S){T.textContent='Splits';S.textContent='Manage your splits \u2014 start a session from Today';
+  var r='';
   if(!db.splits.length)r+='<div class="empty"><div class="ic">'+sv('splits')+'</div><p>Group the exercises you repeat each week into a day, like Push or Back &amp; Biceps.</p></div>';
-  db.splits.forEach(function(sp){r+='<div class="card"><div class="ex-head" style="margin-bottom:9px"><h3>'+esc(sp.name)+'</h3><button class="btn sm primary" onclick="startSplit(\''+sp.id+'\')">Start</button></div>'+
+  db.splits.forEach(function(sp){r+='<div class="card"><div class="ex-head" style="margin-bottom:9px"><h3>'+esc(sp.name)+'</h3></div>'+
     '<div class="muted tiny" style="line-height:1.55;margin-bottom:13px">'+(sp.exercises.map(function(e){return esc(e.name);}).join('  \u00b7  ')||'No exercises yet')+'</div>'+
     '<div class="row tight"><button class="btn ghost sm" style="flex:1" onclick="editSplit(\''+sp.id+'\')">Edit</button><button class="btn ghost sm" style="flex:1;color:var(--clay)" onclick="delSplit(\''+sp.id+'\')">Delete</button></div></div>';});
+  var candidates=candidateSplitNames();
+  if(candidates.length){
+    r+='<button class="btn dash" style="margin-bottom:9px" onclick="var n=buildSplitsFromHistory();render();toast(n.length+(n.length===1?\' split\':\' splits\')+\' built from history\');">'+sv('plus','')+' Build '+candidates.length+' split'+(candidates.length===1?'':'s')+' from history</button>';
+  }
+  r+='<button class="btn dash" style="margin-bottom:14px" onclick="editSplit()">'+sv('plus','')+' New split</button>';
   app.innerHTML=r;}
 var esplit=null;
 function editSplit(sid){esplit=sid?JSON.parse(JSON.stringify(db.splits.find(function(x){return x.id===sid;}))):{id:uid(),name:'',exercises:[]};drawSplitSheet();}
@@ -883,7 +989,7 @@ function drawSplitSheet(){var h='<h2>'+(esplit.name?'Edit split':'New split')+'<
   h+='<div class="stick"><div class="row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Cancel</button><button class="btn primary" style="flex:1" onclick="saveSplit()">Save</button></div></div>';
   openSheet(h);}
 function pickForSplit(){var have=esplit.exercises.map(function(e){return e.name;});
-  openPicker({title:'Pick exercises',preselect:have,onConfirm:function(names){
+  openPicker({title:'Pick exercises',preselect:have,filter:guessGroupFromSplitName(esplit.name),onConfirm:function(names){
     var keep=esplit.exercises.filter(function(e){return names.indexOf(e.name)>=0;});
     names.filter(function(n){return have.indexOf(n)<0;}).forEach(function(n){keep.push({name:n,sets:3});});
     esplit.exercises=keep;drawSplitSheet();}});}
@@ -987,8 +1093,8 @@ function applySessionName(id,name){var s=db.sessions.find(function(x){return x.i
 function delSession(id){db.sessions=db.sessions.filter(function(x){return x.id!==id;});save();closeSheet();render();toast('Deleted');}
 
 /* ===== progress state ===== */
-var _pEx=null,_pMode='1rm',_pSearch='',_pGroup='All',_pbSplit='All',_exSplit='All';
-var _pPickerOpen=true,_pFiltersOpen=false,_pLogExpanded=false;
+var _pEx=null,_pMode='kpr',_pSearch='',_pGroup='All',_pbSplit='All',_exSplit='All';
+var _pFiltersOpen=false,_pLogExpanded=false;
 var SPLIT_NAMES=['Chest and Triceps','Back and Biceps','Legs','Shoulders and Arms','Mix'];
 var SPLIT_COLOURS={'Chest and Triceps':'#232326','Back and Biceps':'#4A4A4D','Legs':'#6E6E73','Shoulders and Arms':'#98989D','Mix':'#C7C7CC'};
 
@@ -1067,22 +1173,27 @@ function headlineInsight(sessions){
   /* names tracked within range */
   var names=[];sessions.forEach(function(s){s.exercises.forEach(function(e){if(names.indexOf(e.name)<0)names.push(e.name);});});
 
-  /* 1. biggest 1RM gain on a repeated lift */
+  /* 1. biggest kg/rep gain on a repeated lift, recent-window (last 2 sessions vs the 2 before) rather than
+        lifetime first-vs-last — a lifetime comparison only ever grows, so one lift locks in as "best" forever
+        and the banner gets stuck; a recent window lets whichever lift is trending right now take the slot. */
   var bestGain=null;
   names.forEach(function(n){
-    var pts=[];
+    var vals=[];
     sessions.forEach(function(s){
       var ex=s.exercises.find(function(e){return e.name===n;});if(!ex)return;
-      var bestE=0;ex.sets.forEach(function(st){var w=+st.w||0,rr=+st.r||0;if(w&&rr)bestE=Math.max(bestE,w*(1+rr/30));});
-      if(bestE)pts.push({d:s.date,v:bestE});
+      var totKg=0,totR=0;
+      ex.sets.forEach(function(st){var w=+st.w||0,r=+st.r||0;if(w&&r){totKg+=w*r;totR+=r;}});
+      if(totR>0)vals.push(totKg/totR);
     });
-    if(pts.length>=2){
-      var first=pts[0].v,last=pts[pts.length-1].v;
-      if(first>0){var pct=Math.round((last-first)/first*100);
-        if(pct>0&&(!bestGain||pct>bestGain.pct))bestGain={name:n,pct:pct};}
+    if(vals.length>=4){
+      var recent=vals.slice(-2),prior=vals.slice(-4,-2);
+      var ra=recent.reduce(function(a,b){return a+b;},0)/recent.length;
+      var pa=prior.reduce(function(a,b){return a+b;},0)/prior.length;
+      if(pa>0){var pct=Math.round((ra-pa)/pa*100);
+        if(pct>=3&&(!bestGain||pct>bestGain.pct))bestGain={name:n,pct:pct};}
     }
   });
-  if(bestGain&&bestGain.pct>=3)candidates.push('Your <b>'+esc(bestGain.name)+'</b> estimated 1RM is up <b>'+bestGain.pct+'%</b> '+periodPhrase+'.');
+  if(bestGain)candidates.push('Your <b>'+esc(bestGain.name)+'</b> kg/rep is up <b>'+bestGain.pct+'%</b> '+periodPhrase+'.');
 
   /* 2. streak (always all-time, it's about now) */
   var st=streak();
@@ -1110,8 +1221,12 @@ function headlineInsight(sessions){
   else if(gs[top]>=gs[bottom]*3&&gs[bottom]>0)candidates.push('<b>'+top+'</b> is getting roughly 3\u00d7 the volume of <b>'+bottom+'</b> '+periodPhrase+'.');
 
   if(!candidates.length)return 'You\u2019ve logged <b>'+sessions.length+'</b> '+(sessions.length===1?'session':'sessions')+' '+periodPhrase+'. Keep stacking them and trends will sharpen.';
-  return candidates[0];
+
+  /* rotate through whichever candidates qualify today, seeded by date so it's stable within a day
+     but varies day to day instead of always showing the same (highest-priority) one */
+  return candidates[dateHash(todayStr())%candidates.length];
 }
+function dateHash(s){var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);}
 
 /* ===== weekly report =====
    Mon–Sun weeks. Compares the most recent completed week to the one before. */
@@ -1330,7 +1445,6 @@ function refreshPbBoard(){
 
 function selectLift(name){
   _pEx=name;
-  _pPickerOpen=false;
   _pLogExpanded=false;
   recordRecentLift(name);
   renderExplorer();
@@ -1342,12 +1456,27 @@ function recordRecentLift(name){
   p.recentLifts=arr.slice(0,6);
   save();
 }
-function recentLiftsChips(allNames,excludeName){
-  var rec=(getPrefs().recentLifts||[]).filter(function(n){return allNames.indexOf(n)>=0&&n!==excludeName;}).slice(0,5);
-  if(!rec.length)return '';
-  return '<div class="lbl" style="margin-bottom:6px">Recent</div><div class="scroller" style="margin-bottom:10px">'+
-    rec.map(function(n){return '<span class="chip" onclick="event.stopPropagation();selectLift(\''+escAttr(n)+'\')">'+esc(n)+'</span>';}).join('')+
-    '</div>';
+
+/* compact kg/rep trend line for a lift card in the explorer carousel */
+function miniSparkline(name){
+  var vals=[];
+  db.sessions.forEach(function(s){
+    var ex=s.exercises.find(function(e){return e.name===name;});if(!ex)return;
+    var totKg=0,totR=0;
+    ex.sets.forEach(function(st){var w=+st.w||0,r=+st.r||0;if(w&&r){totKg+=w*r;totR+=r;}});
+    if(totR>0)vals.push(totKg/totR);
+  });
+  if(vals.length<2)return '<div class="lc-spark empty"></div>';
+  var w=108,h=32,pad=3;
+  var min=Math.min.apply(null,vals),max=Math.max.apply(null,vals),rng=(max-min)||1;
+  var pts=vals.map(function(v,i){
+    var x=pad+(i/(vals.length-1))*(w-pad*2);
+    var y=h-pad-((v-min)/rng)*(h-pad*2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  var up=vals[vals.length-1]>=vals[0];
+  return '<svg class="lc-spark" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+
+    '<polyline points="'+pts+'" fill="none" stroke="'+(up?'var(--moss)':'var(--clay)')+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 
 function renderExplorer(){
@@ -1359,73 +1488,58 @@ function renderExplorer(){
     var rec=(getPrefs().recentLifts||[]).filter(function(n){return allNames.indexOf(n)>=0;});
     _pEx=rec[0]||allNames[0]||null;
   }
-  if(_pPickerOpen&&_pEx&&filtered.indexOf(_pEx)<0)_pEx=filtered[0]||_pEx;
 
   var r='<div class="card" style="padding:13px 14px">';
 
-  if(_pEx&&!_pPickerOpen){
-    /* collapsed: compact selected-exercise header + one-tap recents */
-    var pbC=exPB(_pEx);
-    r+='<div class="pickrow sel" style="border-bottom:none;padding:2px 2px 6px;cursor:pointer" onclick="_pPickerOpen=true;renderExplorer()">'+
-      '<div style="flex:1"><div class="nm">'+esc(_pEx)+'</div>'+
-      (pbC?'<div class="meta moss">PB '+pbC.txt+' \u00b7 1RM '+pbC.e1rm+' kg</div>':'<div class="meta faint">No data</div>')+
-      '</div><span class="muted tiny" style="flex:none">Change \u203a</span></div>';
-    r+=recentLiftsChips(allNames,_pEx);
+  r+='<input class="inp" id="pSearch" placeholder="Search exercises\u2026" value="'+esc(_pSearch)+'" oninput="_pSearch=this.value;renderExplorer()" style="margin-bottom:10px">';
+
+  var filterBits=[];
+  if(_exSplit!=='All')filterBits.push(_exSplit);
+  if(_pGroup!=='All')filterBits.push(_pGroup);
+  r+='<div class="scroller" style="margin-bottom:'+(_pFiltersOpen?'8px':'2px')+'">'+
+    '<span class="chip '+(_pFiltersOpen?'on':'')+'" onclick="_pFiltersOpen=!_pFiltersOpen;renderExplorer()">'+
+    'Filters'+(filterBits.length?': '+esc(filterBits.join(' \u00b7 ')):'')+'</span></div>';
+
+  if(_pFiltersOpen){
+    r+='<div class="lbl" style="margin-bottom:7px">Split</div>';
+    r+='<div class="scroller" style="margin-bottom:12px">'+['All'].concat(SPLIT_NAMES).map(function(s){
+      return '<span class="chip '+(_exSplit===s?'on':'')+'" onclick="_exSplit=\''+escAttr(s)+'\';_pSearch=\'\';_pGroup=\'All\';renderExplorer()">'+esc(s)+'</span>';
+    }).join('')+'</div>';
+
+    r+='<div class="lbl" style="margin-bottom:6px">Muscle</div>';
+    r+='<div class="scroller" style="margin-bottom:4px">'+['All'].concat(GROUPS).map(function(g){
+      return '<span class="chip '+(_pGroup===g?'on':'')+'" onclick="_pGroup=\''+g+'\';_pSearch=\'\';renderExplorer()">'+g+'</span>';
+    }).join('')+'</div>';
+  }
+
+  /* swipeable card carousel: recents first, then the rest \u2014 tap a card to load its full chart below.
+     Native horizontal scroll + scroll-snap gives swipe-through-cards behaviour without custom drag JS. */
+  if(filtered.length){
+    var rec2=(getPrefs().recentLifts||[]).filter(function(n){return filtered.indexOf(n)>=0;});
+    var restNames=filtered.filter(function(n){return rec2.indexOf(n)<0;});
+    var ordered=rec2.concat(restNames);
+
+    r+='<div class="lbl" style="margin:12px 0 8px">'+filtered.length+' exercise'+(filtered.length===1?'':'s')+' \u00b7 tap to view</div>';
+    r+='<div class="liftrail" id="liftRail">'+ordered.map(function(n){
+      var pb=exPB(n);
+      return '<div class="liftcard'+(n===_pEx?' sel':'')+'" onclick="selectLift(\''+escAttr(n)+'\')">'+
+        '<div class="lc-name">'+esc(n)+'</div>'+
+        (pb?'<div class="lc-pb">PB '+pb.txt+'</div>':'<div class="lc-pb faint">No data</div>')+
+        miniSparkline(n)+
+        '</div>';
+    }).join('')+'</div>';
   }else{
-    /* expanded: search-first picker, split/muscle filters tucked behind one toggle */
-    if(_pEx){
-      r+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'+
-        '<span class="chip" onclick="_pPickerOpen=false;renderExplorer()">Done</span></div>';
-    }
-
-    r+='<input class="inp" id="pSearch" placeholder="Search exercises\u2026" value="'+esc(_pSearch)+'" oninput="_pSearch=this.value;renderExplorer()" style="margin-bottom:10px">';
-
-    r+=recentLiftsChips(allNames,null);
-
-    var filterBits=[];
-    if(_exSplit!=='All')filterBits.push(_exSplit);
-    if(_pGroup!=='All')filterBits.push(_pGroup);
-    r+='<div class="scroller" style="margin-bottom:'+(_pFiltersOpen?'8px':'2px')+'">'+
-      '<span class="chip '+(_pFiltersOpen?'on':'')+'" onclick="_pFiltersOpen=!_pFiltersOpen;renderExplorer()">'+
-      'Filters'+(filterBits.length?': '+esc(filterBits.join(' \u00b7 ')):'')+'</span></div>';
-
-    if(_pFiltersOpen){
-      r+='<div class="lbl" style="margin-bottom:7px">Split</div>';
-      r+='<div class="scroller" style="margin-bottom:12px">'+['All'].concat(SPLIT_NAMES).map(function(s){
-        return '<span class="chip '+(_exSplit===s?'on':'')+'" onclick="_exSplit=\''+escAttr(s)+'\';_pSearch=\'\';_pGroup=\'All\';renderExplorer()">'+esc(s)+'</span>';
-      }).join('')+'</div>';
-
-      r+='<div class="lbl" style="margin-bottom:6px">Muscle</div>';
-      r+='<div class="scroller" style="margin-bottom:4px">'+['All'].concat(GROUPS).map(function(g){
-        return '<span class="chip '+(_pGroup===g?'on':'')+'" onclick="_pGroup=\''+g+'\';_pSearch=\'\';renderExplorer()">'+g+'</span>';
-      }).join('')+'</div>';
-    }
-
-    /* exercise list */
-    if(filtered.length){
-      var byG={};filtered.forEach(function(n){var g=groupOf(n);(byG[g]=byG[g]||[]).push(n);});
-      r+='<div style="margin-top:10px">';
-      Object.keys(byG).sort().forEach(function(g){
-        r+='<div class="lbl" style="margin:10px 0 4px">'+g+'</div>';
-        byG[g].forEach(function(n){
-          var pb=exPB(n);
-          r+='<div class="pickrow '+(n===_pEx?'sel':'')+'" onclick="selectLift(\''+escAttr(n)+'\')">'+
-            '<div class="box">'+sv('check')+'</div>'+
-            '<div style="flex:1"><div class="nm">'+esc(n)+'</div>'+
-            (pb?'<div class="meta moss">PB '+pb.txt+' \u00b7 1RM '+pb.e1rm+' kg</div>':'<div class="meta faint">No data</div>')+
-            '</div></div>';
-        });
-      });
-      r+='</div>';
-    }else{
-      r+='<p class="muted tiny" style="padding:14px 2px">No exercises match.</p>';
-    }
+    r+='<p class="muted tiny" style="padding:14px 2px">No exercises match.</p>';
   }
   r+='</div>';
 
   /* chart card */
   r+='<div id="liftChart"></div>';
   wrap.innerHTML=r;
+
+  var sel=wrap.querySelector('.liftcard.sel');
+  if(sel)sel.scrollIntoView({behavior:'instant',inline:'center',block:'nearest'});
+
   renderProgressLift();
 }
 
