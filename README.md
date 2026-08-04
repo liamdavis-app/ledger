@@ -1,6 +1,6 @@
 # Ledger
 
-A minimalist strength-training tracker. Log sessions, track personal bests, and see trends per lift — installable as a home-screen app, no account, no backend.
+A minimalist strength-training tracker. Log sessions, track personal bests, and see trends per lift- installable as a home-screen app, no account, no backend.
 
 **[Live demo →](https://liamdavis-app.github.io/ledger/)** *(pre-loaded with sample training data, not real logs)*
 
