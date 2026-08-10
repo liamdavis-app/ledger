@@ -11,13 +11,15 @@ A minimalist strength-training tracker. Log sessions, track personal bests, and 
 - **Today** — start a session from a saved split or from scratch, log sets against a live target, mark them done.
 - **Splits** — group exercises into repeatable training days (Push, Legs, Back & Biceps, etc).
 - **Library** — the exercise catalogue, with a description field and automatic muscle-group suggestion for new entries.
-- **History** — every past session, editable, exportable/importable as JSON.
+- **History** — every past session, editable.
 - **Progress** — the main analytics surface:
-  - **Lift explorer**: per-exercise trend chart (estimated 1RM, top weight, top reps, or kg/rep) with a linear projection of where you're headed
+  - **Lift explorer**: per-exercise trend chart (estimated 1RM, top weight, or kg/rep) with a linear projection of where you're headed. Kg/rep can be smoothed to a trailing 3-session average, so one off day doesn't read as a trend — the raw sessions stay visible underneath.
   - **Personal bests**: heaviest weight lifted for 2+ reps, per exercise
   - **Muscle group balance**: set distribution across the week/month
   - **Training frequency heatmap**
   - **Weekly report card**: what improved and what slipped, split- and exercise-level
+  - **Body weight**: log weigh-ins with date and time, then read them as a 3-day, 7-day, 2-week or 4-week rolling average with a kg/week trend rate and an optional goal — averaging is the point, since daily swings from food, water and time of day drown out the actual direction
+- **Settings** — profile placeholder, default set count, body-weight visibility and goal, and JSON export/import. Importing merges rather than overwrites, so restoring an older backup can't silently drop data the file predates.
 
 ## How it's built
 
