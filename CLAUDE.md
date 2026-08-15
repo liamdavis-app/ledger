@@ -6,10 +6,14 @@ Working file: `index.html` in this folder. This is the only file that matters �
 
 ## Deploy workflow (manual every time — I can't do this part)
 1. I edit `index.html` here.
-2. You drag-drop `index.html` into the Netlify dashboard to deploy.
+2. You deploy to Netlify. **Open the existing site first, then drop `index.html` into that site's Deploys tab.** Dropping a file onto the Netlify *dashboard* (the sites list) creates a **brand new site with a new random `something.netlify.app` name** instead of updating the existing one — see Known Incidents 2026-08-15, this caused a real data-loss scare.
 3. On your phone: fully close and reopen the app (not just background it) to clear cache. This is required — "changes not showing" is almost always a stale cache, not a bad deploy.
 
 Netlify dashboard URL (`app.netlify.com`) ≠ the live app URL (`something.netlify.app`). Only the live URL goes on the home screen.
+
+**The live app URL is deliberately not recorded in this file** — the repo is public and the real app is never linked from anything public (only the GitHub Pages demo, which uses fabricated data). It's in `LOCAL.md`, which is gitignored.
+
+localStorage is keyed to the **origin** (scheme + hostname), not the path — `/` and `/index.html` share a store; a different subdomain or a deploy-preview URL (`abc123--site.netlify.app`) is a completely separate, empty store.
 
 ## Facts that cost real debugging time to learn — don't relitigate these
 - Data lives in the phone's browser **localStorage**, keyed to the exact URL. It is never in the file itself, and deploying a new file does **not** touch stored data.
@@ -59,9 +63,22 @@ Netlify dashboard URL (`app.netlify.com`) ≠ the live app URL (`something.netli
 ## Known incidents
 - **2026-07 data loss (resolved)**: re-adding the app to the home screen after a deploy created a second shortcut pointing at fresh/empty storage, while the original shortcut still held the real sessions. Recovered via History → Export from the old shortcut. Verified recovery: all 13 sessions cross-checked byte-for-byte (id/date/name) against `~/Downloads/ledger-2026-07-02.json` — confirmed complete as of 2026-07-07.
 - Takeaway: if data ever looks missing, check for a duplicate home-screen icon before assuming it's gone.
+- **2026-08-15 "August sessions gone after the Stelm rename" (resolved, not data loss)**: after renaming the app to Stelm, deploying, and re-adding the home screen icon, the new icon showed only pre-July sessions — everything since 2 July appeared missing. **Root cause: the deploy created a new Netlify site.** Dropping `index.html` onto the Netlify dashboard (rather than into the existing site's Deploys tab) spun up a fresh site at a new random subdomain. localStorage is keyed to origin, so the new address had an empty store and the old address still held everything. (Both URLs are in the gitignored `LOCAL.md`.) Deploy step above corrected so this can't repeat.
+  - **The diagnostic tell, worth remembering:** "only sessions older than early July are visible" does **not** mean partial data loss — it means the store is *completely empty* and you are seeing the hardcoded `BACKFILL` array, which `load()` merges in whenever localStorage is blank (index.html L534-537). Any time the app looks like it lost recent-but-not-old data, check the URL before anything else.
+  - Recovered by importing the JSON export taken immediately before the icon swap. `importData()` merges (`Object.assign({},blank,db,inc)`) and `BACKFILL` dedupes by id, so the restore produced no duplicates.
+  - Takeaway: the pre-swap export is what made this a 20-minute annoyance instead of a loss. Keep doing it before any deploy or icon change.
 - **2026-07-23 "empty Splits tab" scare (resolved, not data loss)**: user reported 5 known splits (Legs, Back and Biceps, Chest and Triceps, Shoulders and Arms, Mix) missing from the Splits tab. Root cause: `db.splits` (reusable templates) and session *names* in `db.sessions` (set via `renameSession()`) were always two separate, disconnected pieces of data — the user had been naming sessions consistently for months but had never used "New Split" to create matching template entries, so the Splits tab was correctly empty, not broken. Ruled out duplicate-icon and wrong-URL causes first (same home-screen icon, confirmed). Fixed by building "Build splits from history" (see Feature inventory) rather than manual recreation. Takeaway: before assuming data loss, check whether the "missing" thing was ever actually the same data store as what still looks present elsewhere (here: History tab still had everything, because it reads `db.sessions`, not `db.splits`).
 
 ## Open / in progress
+- **Rename Ledger → Stelm** — decided 2026-08-15. **`index.html` done** (7 sites: meta
+  app title, `<title>`, `.brand` header span, Settings copy, About copy, Epley explainer,
+  and the export filename prefix `stelm-`). **Still outstanding:** `docs/index.html` (the
+  demo, doesn't sync), `README.md`, and the phone's home screen icon. Deliberately *not*
+  renamed and must stay: `DB_KEY='ledger_v1'` (localStorage key — changing it makes every
+  session vanish) and the `.ledger` CSS class (the sets table, not branding). Full
+  checklist in `PAID-APP-PLAN.md` under "Rename execution checklist". Note the home screen
+  name only changes on a *newly added* shortcut — and re-adding is what caused the 2026-07
+  data loss, so export a backup and verify before deleting the old icon.
 - **Auto-backup feature** — not shipped. Plan: `autoBackup(silent)` downloads a dated JSON backup on `finishSession()` tap (iOS requires a user gesture, so it's tied to "Finish & log"); `prefs.lastBackup` timestamp; `lastBackupText()` helper for "Last backup: N days ago"; also wants a "Back up now" button added to the existing History tab Backup card (which already has Export/Import). None of this is in the current file — needs building from scratch, not just verifying.
 - **GitHub / version history** — done as of 2026-07-08. Repo pushed to [github.com/liamdavis-app/ledger](https://github.com/liamdavis-app/ledger) (public). Deploy workflow unchanged: still drag-drop `index.html` into Netlify manually; git is purely for version history alongside that. Note: it would *not* have prevented the data-loss incident above (that was a browser-storage-vs-app-code issue, unrelated to how the code is versioned).
 

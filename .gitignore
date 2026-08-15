@@ -1,1 +1,8 @@
 .DS_Store
+
+# Local-only: business planning, not for the public portfolio repo
+PAID-APP-PLAN.md
+LOCAL.md
+
+# Local tooling config
+.claude/
