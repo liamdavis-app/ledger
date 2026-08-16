@@ -11,3 +11,7 @@ MEMORY.md
 
 # Local tooling config
 .claude/
+
+# Local-only: the real training sessions removed from index.html on 2026-08-16.
+# Kept out of this public repo deliberately. Also recoverable from git history.
+BACKFILL-real.local.js
