@@ -1,5 +1,16 @@
 # Ledger — project notes
 
+## Scope of this repo — check before starting work
+
+This repo is **only** the local-only, single-file app: the PWA itself (`index.html`) and the
+public demo build (`docs/index.html`). It is public.
+
+The multi-user paid product is a **separate fork, tracked in its own private repo in a
+different working directory** — backend, database schema, auth, sync, payments, native
+wrapper and all business/product planning live there, not here. Nothing syncs between them.
+If the task is any of those things, stop and ask which directory to work in; don't assume
+this one. Its own notes carry the full routing table.
+
 Single-file `index.html` gym/strength-tracking PWA. No build step, no framework, no git (yet). Monochrome aesthetic as of 2026-07-16: paper `#F5F5F7`, card `#FFFFFF`, ink `#1D1D1F`. The `--clay`/`--moss` CSS variable *names* are unchanged (too many call sites to rename for zero visual benefit) but now hold greys, not the old rust/moss hues: `--clay:#232326` (near-black, primary actions/strong emphasis), `--moss:#565A61` (steel-grey, data/progress accent). `SPLIT_COLOURS` and `groupColours` are now 5-/8-step greyscale ramps, not hues.
 
 Working file: `index.html` in this folder. This is the only file that matters — edit it directly.
