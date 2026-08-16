@@ -1,5 +1,20 @@
 # Ledger — project notes
 
+## THIS REPO IS FROZEN (temporarily) — 2026-08-16
+
+The app has been forked into a build-based project in a separate private repo. **Active
+development happens there, not here.** This repo — including `docs/index.html`, the public
+demo — is frozen and will drift from the real product.
+
+**This freeze is deliberate but temporary.** The demo is not a priority right now; the
+intended end state is that it gets regenerated from the fork with fabricated seed data, via a
+script that does not exist yet. **Do not treat the drift as acceptable indefinitely** — the
+demo is the public face of the portfolio piece, and a demo that misrepresents the product is
+worse than no demo. Raise it if it has been left more than a couple of months.
+
+Do not port fixes here by hand. If something must change in this repo, say so explicitly
+first — a change here does not reach the real app.
+
 ## Scope of this repo — check before starting work
 
 This repo is **only** the local-only, single-file app: the PWA itself (`index.html`) and the

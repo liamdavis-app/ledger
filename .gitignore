@@ -4,5 +4,10 @@
 PAID-APP-PLAN.md
 LOCAL.md
 
+# Local-only: decision log. This repo is public, and the log records internal reasoning
+# plus an unresolved note about real training data being present here — publishing it
+# would point at exactly what it describes.
+MEMORY.md
+
 # Local tooling config
 .claude/
