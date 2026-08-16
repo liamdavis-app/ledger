@@ -81,15 +81,24 @@ localStorage is keyed to the **origin** (scheme + hostname), not the path — `/
 - **2026-07-23 "empty Splits tab" scare (resolved, not data loss)**: user reported 5 known splits (Legs, Back and Biceps, Chest and Triceps, Shoulders and Arms, Mix) missing from the Splits tab. Root cause: `db.splits` (reusable templates) and session *names* in `db.sessions` (set via `renameSession()`) were always two separate, disconnected pieces of data — the user had been naming sessions consistently for months but had never used "New Split" to create matching template entries, so the Splits tab was correctly empty, not broken. Ruled out duplicate-icon and wrong-URL causes first (same home-screen icon, confirmed). Fixed by building "Build splits from history" (see Feature inventory) rather than manual recreation. Takeaway: before assuming data loss, check whether the "missing" thing was ever actually the same data store as what still looks present elsewhere (here: History tab still had everything, because it reads `db.sessions`, not `db.splits`).
 
 ## Open / in progress
-- **Rename Ledger → Stelm** — decided 2026-08-15. **`index.html` done** (7 sites: meta
-  app title, `<title>`, `.brand` header span, Settings copy, About copy, Epley explainer,
-  and the export filename prefix `stelm-`). **Still outstanding:** `docs/index.html` (the
-  demo, doesn't sync), `README.md`, and the phone's home screen icon. Deliberately *not*
-  renamed and must stay: `DB_KEY='ledger_v1'` (localStorage key — changing it makes every
-  session vanish) and the `.ledger` CSS class (the sets table, not branding). Full
-  checklist in `PAID-APP-PLAN.md` under "Rename execution checklist". Note the home screen
-  name only changes on a *newly added* shortcut — and re-adding is what caused the 2026-07
-  data loss, so export a backup and verify before deleting the old icon.
+- **Rename Ledger → Stelm — code rename COMPLETE** (verified 2026-08-16). All 7 branding
+  sites done in **both** `index.html` and `docs/index.html` (meta app title, `<title>`,
+  `.brand` header span, Settings copy, About copy, Epley explainer, export filename prefix
+  `stelm-`; the demo's `.brand` also carries the "· demo" suffix), plus `README.md`'s title.
+  A previous version of this bullet claimed the demo and README were outstanding — they were
+  not; that was stale. Verified by grep: the only `ledger` strings left in either file are
+  the two that must never change — `DB_KEY='ledger_v1'` (localStorage key; changing it makes
+  every session vanish) and the `.ledger` CSS class (the sets table, not branding).
+  **Two genuinely outstanding items, both outside the code:**
+  1. **The phone's home screen icon** still says Ledger. `apple-mobile-web-app-title` only
+     applies to a *newly added* shortcut, and re-adding is what caused the 2026-07 data loss
+     — export a backup and verify the data is present before deleting the old icon.
+  2. **The repo name**, which is the last public "ledger" string, via the Pages demo URL
+     `https://liamdavis-app.github.io/ledger/` in `README.md` L5. **Blocked:** the name
+     `stelm` is already taken by the private paid-product repo in the same account, so a
+     straight rename is impossible. Needs a decision, not just an edit — see MEMORY.md.
+     No data risk either way: the real app is on Netlify, and the demo runs on fabricated
+     seed data, so a new Pages origin just means a fresh empty demo store.
 - **Auto-backup feature** — not shipped. Plan: `autoBackup(silent)` downloads a dated JSON backup on `finishSession()` tap (iOS requires a user gesture, so it's tied to "Finish & log"); `prefs.lastBackup` timestamp; `lastBackupText()` helper for "Last backup: N days ago"; also wants a "Back up now" button added to the existing History tab Backup card (which already has Export/Import). None of this is in the current file — needs building from scratch, not just verifying.
 - **GitHub / version history** — done as of 2026-07-08. Repo pushed to [github.com/liamdavis-app/ledger](https://github.com/liamdavis-app/ledger) (public). Deploy workflow unchanged: still drag-drop `index.html` into Netlify manually; git is purely for version history alongside that. Note: it would *not* have prevented the data-loss incident above (that was a browser-storage-vs-app-code issue, unrelated to how the code is versioned).
 
